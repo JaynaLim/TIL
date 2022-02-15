@@ -827,3 +827,163 @@ FROM
 INNER JOIN PRODUCT_GROUP B ON
 	(A.GROUP_ID = B.GROUP_ID);
 
+------------------------------------------------------------------------------------------
+-- ROW_NUMBER 예제
+-- ROW_NUMBER를 GROUP_NAME 별로 그룹화 + PRICE 기준 오름차순 정렬해서 누적 ROW_NUM을 구함
+SELECT
+	A.PRODUCT_NAME,
+	B.GROUP_NAME,
+	A.PRICE,
+	ROW_NUMBER () OVER 
+	(PARTITION BY B.GROUP_NAME ORDER BY A.PRICE)  -- ROW_NUM은 ORDER BY 기준에 같은 값이 있어도 무조건 순차적으로 (1,2,3,4,5...) 감
+FROM
+	PRODUCT A
+INNER JOIN PRODUCT_GROUP B 
+	ON (A.GROUP_ID = B.GROUP_ID);
+
+--------------------------------------------------------------------------------------------
+--RANK 예쩨
+SELECT
+	A.PRODUCT_NAME,
+	B.GROUP_NAME,
+	A.PRICE,
+	RANK () OVER 
+	(PARTITION BY B.GROUP_NAME ORDER BY A.PRICE)  -- RANK는 동순위는 같은 값으로 매겨짐 (다음순위는 건너뜀)
+FROM
+	PRODUCT A
+INNER JOIN PRODUCT_GROUP B 
+	ON (A.GROUP_ID = B.GROUP_ID);
+
+----------------------------------------------------------------------------------------------
+--DENSE_RANK 예제
+SELECT
+	A.PRODUCT_NAME,
+	B.GROUP_NAME,
+	A.PRICE,
+	DENSE_RANK () OVER 
+	(PARTITION BY B.GROUP_NAME ORDER BY A.PRICE)  -- 동순위는 같은 값으로 매겨지고, 다음 순위 건너뛰지 않음
+FROM
+	PRODUCT A
+INNER JOIN PRODUCT_GROUP B 
+	ON (A.GROUP_ID = B.GROUP_ID);
+
+
+-----------------------------------------------------------------------------------------------
+--FIRST_VALUE 예제
+--product_group 별로 가장 가격이 낮은 데이터를 뽑아보자
+SELECT
+	A.PRODUCT_NAME,
+	B.GROUP_NAME,
+	A.PRICE, 
+	FIRST_VALUE (A.PRICE) OVER
+	(PARTITION BY B.GROUP_NAME ORDER BY A.price)
+	AS LOWEST_PRICE_PER_GROUP
+	FROM PRODUCT A
+	INNER JOIN PRODUCT_GROUP B
+		ON (A.GROUP_ID = B.group_id)
+		
+------------------------------------------------------------------------------------------------
+--LAST_VALUE 예제
+SELECT
+	A.PRODUCT_NAME, B.GROUP_NAME, A.PRICE, LAST_VALUE (A.PRICE) OVER
+	(PARTITION BY B.GROUP_NAME ORDER BY A.PRICE DESC)  --현재 ROW 포함 이전까지의 ROW 중 마지막 값을 뽑음
+	AS LOWEST_PRICE_PER_GROUP
+FROM PRODUCT A
+INNER JOIN PRODUCT_GROUP B
+	ON (A.GROUP_ID = B.GROUP_ID);
+
+--그룹 내의 전체 ROW 중 마지막값을 뽑개 하려면 LAST_vALUE의 RANGE를 변경해야 함
+SELECT
+	A.PRODUCT_NAME, B.GROUP_NAME, A.PRICE, LAST_VALUE (A.PRICE) OVER
+	(PARTITION BY B.GROUP_NAME ORDER BY A.PRICE DESC
+	RANGE BETWEEN UNBOUNDED PRECEDING 
+	AND UNBOUNDED FOLLOWING)  -- DEFAULT는 UNBOUNDED PRECEDING AND CURRENT ROW 임
+	AS LOWEST_PRICE_PER_GROUP
+FROM PRODUCT A
+INNER JOIN PRODUCT_GROUP B
+	ON (A.GROUP_ID = B.GROUP_ID);
+
+-------------------------------------------------------------------------------------------------
+--LAG 함수 예제
+--PRICE 열의 바로 이전 값을 찾아서 현재 값과 빼기
+SELECT
+	A.PRODUCT_NAME,
+	B.GROUP_NAME,
+	A.PRICE,
+	LAG(A.PRICE, 1) OVER  -- PRICE 열의 1번째 이전 행을 찾아서 PREV_PRICE로 
+	(PARTITION BY B.GROUP_NAME ORDER BY A.PRICE)
+	AS PREV_PRICE,
+	A.PRICE - LAG(PRICE,1) OVER (  -- 현재 PRICE와 이전행의 차를 구해서 새 열로 넣기
+	PARTITION BY GROUP_NAME ORDER BY A.PRICE )
+	AS CUR_PREV_DIFF
+FROM PRODUCT A
+INNER JOIN PRODUCT_GROUP B
+	ON (A.GROUP_ID = B.GROUP_ID);
+
+--PRICE 열의 2번째 전 값을 찾아 현재 값과 차이 구하기
+SELECT
+	A.PRODUCT_NAME,
+	B.GROUP_NAME,
+	A.PRICE,
+	LAG(A.PRICE, 2) OVER   
+	(PARTITION BY B.GROUP_NAME ORDER BY A.PRICE)
+	AS PREV_PRICE,
+	A.PRICE - LAG(PRICE,2) OVER (  
+	PARTITION BY GROUP_NAME ORDER BY A.PRICE )
+	AS CUR_PREV_DIFF
+FROM PRODUCT A
+INNER JOIN PRODUCT_GROUP B
+	ON (A.GROUP_ID = B.GROUP_ID);
+	
+---------------------------------------------------------------------------------------------------------
+--LEAD 함수 예제
+SELECT
+	A.PRODUCT_NAME,
+	B.GROUP_NAME,
+	A.PRICE,
+	LEAD(A.PRICE, 1) OVER   
+	(PARTITION BY B.GROUP_NAME ORDER BY A.PRICE)
+	AS NEXT_PRICE,
+	A.PRICE - LEAD(PRICE,1) OVER (  
+	PARTITION BY GROUP_NAME ORDER BY A.PRICE )
+	AS CUR_NEXT_DIFF
+FROM PRODUCT A
+INNER JOIN PRODUCT_GROUP B
+	ON (A.GROUP_ID = B.GROUP_ID);
+	
+----------------------------------------------------------------------------------------------------------
+--------------------------------------------CHAP.3 실습문제1-------------------------------------------------
+----DVDRENTAL 데이터의 RENTAL 테이블을 이용하여 연,월,연월일,전체 각각의 기준으로 RENTAL_ID 기준 렌탈이 일어난 횟수를 출력하라----
+--(전체 데이터를 기준으로 모든 행을 출력해야 함)----------------------------------------------------------------------
+-- 분석함수 이용해야 겟군.. COUNT(RENTAL_DATE), GROUP BY를 하는데 RENTAL ID는 무조건 포함해야 함
+SELECT 
+	TO_CHAR(RENTAL_DATE, 'YYYY') Y,
+	TO_CHAR(RENTAL_DATE, 'MM') M,
+	TO_CHAR(RENTAL_DATE, 'DD') D,
+	COUNT(RENTAL_ID)
+FROM RENTAL
+GROUP BY
+ROLLUP
+(
+	TO_CHAR(RENTAL_dATE, 'YYYY'),
+	TO_CHAR(RENTAL_DATE, 'MM'),
+	TO_CHAR(RENTAL_DATE, 'DD')
+);
+
+------------------------------------------------------------------------------------------------------------
+----------------------------------------------CHAP.3 실습문제2------------------------------------------------
+-------RENTAL과 CUSTOMER 테이블을 이용하여 현재까지 가장 많이 RENTAL을 한 고객의 ID, 렌탈순위, 누적렌탈횟수, 이름을 출력하라------
+
+SELECT
+	A.customer_id ,
+	ROW_NUMBER() OVER(ORDER BY COUNT(A.RENTAL_ID) DESC) AS RENTAL_RANK,
+	COUNT(A.RENTAL_ID) RENTAL_COUNT,
+	MAX(B.FIRST_NAME) AS FIRST_NAME,
+	MAX(B.LAST_NAME) AS LAST_NAME
+FROM 
+	RENTAL A, CUSTOMER B
+WHERE
+	A.CUSTOMER_ID = B.customer_id 
+GROUP BY A.CUSTOMER_ID ORDER BY RENTAL_RANK LIMIT 1;
+
+	
