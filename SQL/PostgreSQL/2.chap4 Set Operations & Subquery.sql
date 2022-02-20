@@ -386,17 +386,126 @@ ORDER BY
 	
 --------------------------------------------------------------------------------------------------
 --EXISTS 연산자 예시
---고객 리스트 중 지불내역이 11달러를 초과한 고객이 존재하는지 확인하기
+--고객 리스트 중 사용금액이 11달러를 초과한 고객이름을 출력(전체 599개 데이터 중 8개 데이터 출력)
 SELECT
 	FIRST_NAME,
 	LAST_NAME
 FROM
 	CUSTOMER C
 WHERE
-	EXISTS ( SELECT 1
+	EXISTS ( SELECT 1  -- 'SELECT 1'은 모든 ROW가 상수 1로 채워진 COLUMN을 반환한다
 			FROM PAYMENT P
 			WHERE P.CUSTOMER_ID = C.CUSTOMER_ID
-			AND P.AMOUNT > 11)
+			AND P.AMOUNT > 11)   --지불내역이 11달러를 초과한 고객이 존재하는지 확인하기
 ORDER BY
 	FIRST_NAME,
 	LAST_NAME;
+
+--NOT EXISTS문 예제
+--지불내역이 11달러를 초과한 적 없는 고객이름을 출력 (591개 데이터 출력)
+SELECT
+	FIRST_NAME,
+	LAST_NAME
+FROM
+	CUSTOMER C
+WHERE
+	NOT EXISTS ( SELECT 1  --지불내역이 11달러를 초과한 고객이 존재하는지 확인하기
+			FROM PAYMENT P
+			WHERE P.CUSTOMER_ID = C.CUSTOMER_ID
+			AND P.AMOUNT > 11)   
+ORDER BY
+	FIRST_NAME,
+	LAST_NAME;
+	
+
+
+----------------------------------------------------------------------------------------------------
+-------------------------------------------실습문제1 -------------------------------------------------
+--아래 SQL문은 FILM 테이블을 2번이나 스캔하고 있다. FILM 테이블을 한번만 SCAN하여 동일한 결과 집합을 구하는 SQL을 작성하라--
+----------------------------------------------------------------------------------------------------
+--문제 SQL
+SELECT
+	FILM_ID,
+	TITLE,
+	RENTAL_RATE
+FROM
+	FILM
+WHERE
+	RENTAL_RATE > (
+	SELECT
+		AVG(RENTAL_RATE)
+	FROM
+		FILM);
+	
+-- FROM 절에서 데려오면 될 거 같은데..?
+-- AVG를 테이블을 읽어서 데려오지 말고 분석함수로 바로 구함
+SELECT
+	*
+FROM
+	(
+	SELECT
+		FILM_ID,
+		TITLE,
+		RENTAL_RATE,
+		AVG(A.RENTAL_RATE) OVER() AS AVG_RENTAL_RATE
+	FROM
+		FILM A) A
+WHERE
+	RENTAL_RATE > AVG_RENTAL_RATE;
+
+----------------------------------------------------------------------------------------------------
+-------------------------------------------실습문제2--------------------------------------------------
+-------아래 SQL문은 EXCEPT 연산을 사용하여 재고가 없는 영화를 구하고 있다. EXCEPT 연산 없이 같은 결과를 도출하라---------
+----------------------------------------------------------------------------------------------------
+--문제 SQL
+SELECT
+	FILM_ID,
+	TITLE
+FROM
+	FILM
+EXCEPT
+SELECT
+	DISTINCT INVENTORY.film_id,
+	TITLE
+FROM
+	INVENTORY
+INNER JOIN FILM ON
+	FILM.FILM_ID = INVENTORY.FILM_ID
+ORDER BY
+	TILTE;
+
+	
+--NOT EXISTS를 사용하면 더 빠른 쿼리가 되지 않을까? (내 답안인데 틀렸음)
+SELECT A.FILM_ID, A.TITLE
+FROM FILM A
+WHERE 
+	NOT EXISTS (
+		SELECT DISTINCT B.film_id  
+		FROM INVENTORY B
+	)
+ORDER BY TITLE;
+
+-- 위에껀 틀렸고 진짜 정답
+SELECT A.FILM_ID, A.TITLE
+FROM FILM A
+WHERE 
+	NOT EXISTS (  --말 그대로 있느냐 없느냐만 확인해줌
+		SELECT 1
+		FROM INVENTORY B, FILM C
+		WHERE B.FILM_ID = C.FILM_ID  -- 이 WHERE절을 만족해주는 ROW들은 1의 값을 가진 채로 출력되게 됨
+		AND A.FILM_ID = C.FILM_ID
+		)	
+ORDER BY TITLE;
+
+		
+--위 답안보다 더 좋은 답안 (필름 테이블을 1번만 조회하는 방법)
+SELECT A.FILM_ID, A.TITLE
+FROM FILM A
+WHERE 
+	NOT EXISTS (
+		SELECT 1
+		FROM INVENTORY B
+		WHERE 1=1
+		AND A.FILM_ID = B.FILM_ID
+		)	
+ORDER BY TITLE;
